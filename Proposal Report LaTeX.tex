@@ -1,0 +1,506 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+
+\begin{document}
+
+\title{Proposal Report: Implementation of Lightweight Dual-Branch Meta-Learner for Few-Shot Hyperspectral Image Classification Using DMCM2 Framework}
+
+\author{
+\IEEEauthorblockN{Muhammad Miqdad Ramadhan F, Muhammad Khairul Ikhsan}
+\IEEEauthorblockA{\text{P4DSAI Program - Mega Project} \\
+Universitas Syiah kuala
+Banda Aceh\\
+mqdad@mhs.usk.ac.id, m.khairuli@mhs.usk.ac.id}
+}
+
+\maketitle
+
+\begin{abstract}
+Hyperspectral image (HSI) classification has become increasingly important in remote sensing applications, yet it faces significant challenges due to limited labeled samples and high computational costs. This research proposes the implementation of DMCM2 (Dual-Adjustment Cross-Domain Meta-Learner version 2), a lightweight few-shot learning framework specifically designed for HSI classification. The proposed method integrates TGAN2 (3D Ghost Attention Network version 2) as a feature extractor with only 260K parameters, significantly reducing computational requirements compared to conventional deep learning approaches. We employ a Class-Center based Mahalanobis (CCM) distance metric combined with intracorrection learning to enhance classification performance under extremely limited training samples. The framework will be evaluated on the Pavia University dataset using a 9-way 5-shot learning scenario, where only 5 labeled samples per class are available for training. This study aims to demonstrate that lightweight architectures can achieve competitive performance while maintaining computational efficiency, making HSI classification more accessible for resource-constrained environments.
+\end{abstract}
+
+\begin{IEEEkeywords}
+Hyperspectral image classification, few-shot learning, meta-learning, lightweight deep learning, ghost convolution, attention mechanism
+\end{IEEEkeywords}
+
+\section{Introduction}
+
+\subsection{Background}
+Hyperspectral imaging technology captures spectral information across hundreds of continuous narrow bands, enabling detailed material identification and classification in remote sensing applications \cite{plaza2009}. Despite its rich spectral information, HSI classification remains challenging due to the curse of dimensionality and the scarcity of labeled training samples, which are expensive and time-consuming to obtain \cite{fauvel2013}.
+
+Traditional machine learning methods such as Support Vector Machines (SVM) and Random Forests have been widely applied to HSI classification \cite{melgani2004}. However, these methods struggle to capture complex spatial-spectral relationships and require substantial labeled data to achieve satisfactory performance. Recent advances in deep learning, particularly Convolutional Neural Networks (CNNs), have shown promising results by automatically learning hierarchical feature representations \cite{zhang2016dl}. Nevertheless, conventional deep learning approaches demand large training datasets and significant computational resources, limiting their practical deployment.
+
+Few-shot learning has emerged as a promising paradigm to address the limited labeled sample problem by enabling models to generalize from minimal training examples \cite{wang2020}. Meta-learning approaches, which learn to learn from few examples, have demonstrated remarkable success in computer vision tasks \cite{finn2017}. However, applying these techniques to HSI classification introduces unique challenges due to the high-dimensional spectral data and complex spatial-spectral correlations.
+
+\subsection{Problem Statement}
+Current state-of-the-art deep learning models for HSI classification suffer from three major limitations:
+
+\begin{enumerate}
+\item \textbf{Data Scarcity:} HSI datasets typically contain limited labeled samples due to the high cost of ground truth annotation, leading to overfitting and poor generalization.
+\item \textbf{Computational Complexity:} Existing deep learning architectures require millions of parameters and extensive computational resources, hindering deployment on edge devices and real-time applications.
+\item \textbf{Domain Adaptation:} Models trained on one HSI dataset often fail to generalize to new scenes or sensor configurations without substantial retraining.
+\end{enumerate}
+
+While recent few-shot learning methods such as DFSL, RN-FSC, and CMFSL have attempted to address these challenges \cite{gao2019,li2020,zhang2021}, they still rely on heavyweight feature extractors with over 4 million parameters, making them impractical for resource-constrained scenarios.
+
+\subsection{Research Objectives}
+This research aims to implement and evaluate the DMCM2 framework with the following specific objectives:
+
+\begin{enumerate}
+\item To develop a lightweight feature extraction network (TGAN2) with approximately 260K parameters that effectively captures spatial-spectral features from hyperspectral data.
+\item To integrate the Class-Center based Mahalanobis (CCM) distance metric for robust few-shot classification under limited training samples.
+\item To implement intracorrection learning mechanism that enhances model generalization by leveraging support set information during meta-training.
+\item To evaluate the proposed framework on the Pavia University dataset under 9-way 5-shot learning scenario and compare performance against established baseline methods.
+\item To demonstrate that lightweight architectures can achieve competitive accuracy while significantly reducing computational costs compared to existing approaches.
+\end{enumerate}
+
+\subsection{Research Contributions}
+The expected contributions of this research are:
+
+\begin{enumerate}
+\item Implementation of a complete few-shot learning pipeline for HSI classification with comprehensive preprocessing, training, and evaluation components.
+\item Demonstration of parameter-efficient deep learning for remote sensing applications, showing that models with fewer than 300K parameters can effectively perform few-shot HSI classification.
+\item Empirical analysis of the trade-off between model complexity and classification performance in few-shot learning scenarios.
+\item Open-source implementation that facilitates reproducibility and enables further research in lightweight HSI classification methods.
+\end{enumerate}
+
+\section{Literature Review}
+
+\subsection{Hyperspectral Image Classification}
+HSI classification aims to assign semantic labels to each pixel based on its spectral signature and spatial context. Early approaches relied on spectral features alone, treating each pixel independently \cite{landgrebe2002}. The introduction of spatial information through morphological operations and spatial filtering improved classification accuracy \cite{dallamura2010}. More recently, joint spatial-spectral methods have become dominant, leveraging both types of information simultaneously \cite{chen2014}.
+
+\subsection{Deep Learning for HSI Classification}
+The application of deep learning to HSI classification began with 1D CNNs operating on spectral vectors \cite{hu2015}. Subsequently, 2D CNNs were introduced to capture spatial context \cite{zhao2016}, followed by 3D CNNs that jointly model spatial-spectral features \cite{li2017}. Notable architectures include:
+
+\begin{itemize}
+\item \textbf{3D-CNN:} Pioneering work applying 3D convolutions to HSI classification \cite{li2017}.
+\item \textbf{SSRN:} Spectral-Spatial Residual Network using skip connections \cite{zhong2018}.
+\item \textbf{HybridSN:} Hybrid spectral-spatial CNN combining 3D and 2D convolutions \cite{roy2020}.
+\end{itemize}
+
+Despite their success, these methods require thousands of labeled samples per class and millions of parameters, limiting their applicability in few-shot scenarios.
+
+\subsection{Few-Shot Learning}
+Few-shot learning enables models to recognize new classes from minimal examples. Meta-learning approaches train models on multiple tasks, learning transferable knowledge that facilitates rapid adaptation \cite{hospedales2021}. Key paradigms include:
+
+\begin{itemize}
+\item \textbf{Metric Learning:} Learning discriminative embeddings where class prototypes can be computed from few examples. Representative methods include Matching Networks \cite{vinyals2016}, Prototypical Networks \cite{snell2017}, and Relation Networks \cite{sung2018}.
+\item \textbf{Optimization-based:} Learning initialization parameters that enable rapid fine-tuning. Model-Agnostic Meta-Learning (MAML) is the seminal work \cite{finn2017}.
+\item \textbf{Hallucination-based:} Generating synthetic samples to augment limited training data \cite{antoniou2017}.
+\end{itemize}
+
+\subsection{Few-Shot Learning for HSI Classification}
+Recent works have adapted few-shot learning to HSI classification:
+
+\begin{itemize}
+\item \textbf{DFSL:} Deep Few-Shot Learning combining metric learning with data augmentation \cite{gao2019}.
+\item \textbf{RN-FSC:} Relation Network for Few-Shot Classification using learnable distance metrics \cite{li2020}.
+\item \textbf{DCFSL:} Deep Cross-domain Few-Shot Learning addressing domain shift \cite{liu2022}.
+\item \textbf{CMFSL:} Cross-domain Meta-learning for Few-Shot Learning with covariance-based metrics \cite{zhang2021}.
+\end{itemize}
+
+While these methods show improved performance over traditional approaches, they still employ heavyweight architectures with 4-10 million parameters.
+
+\subsection{Lightweight Deep Learning}
+Lightweight architectures aim to reduce computational costs while maintaining performance:
+
+\begin{itemize}
+\item \textbf{MobileNets:} Depthwise separable convolutions reducing parameters and computations \cite{howard2017}.
+\item \textbf{ShuffleNet:} Channel shuffle operations enabling efficient group convolutions \cite{zhang2018}.
+\item \textbf{GhostNet:} Generating more feature maps from cheap linear operations \cite{han2020}.
+\end{itemize}
+
+GhostNet version 2 introduces additional improvements including DFC attention and enhanced feature reuse \cite{tang2022}, forming the basis for our TGAN2 architecture.
+
+\subsection{Research Gap}
+Existing few-shot HSI classification methods have not adequately addressed the computational efficiency challenge. Most approaches prioritize accuracy over parameter efficiency, resulting in models unsuitable for edge deployment or real-time processing. Furthermore, limited work has explored the integration of lightweight architectures with advanced meta-learning techniques specifically for hyperspectral data. This research addresses this gap by implementing a lightweight dual-branch meta-learner that balances performance and efficiency.
+
+\section{Methodology}
+
+\subsection{Dataset}
+We will use the Pavia University dataset, a widely-used benchmark for HSI classification research. The dataset specifications are:
+
+\begin{itemize}
+\item \textbf{Sensor:} ROSIS (Reflective Optics System Imaging Spectrometer)
+\item \textbf{Spatial dimensions:} $610 \times 340$ pixels
+\item \textbf{Spectral bands:} 103 bands after removing noisy channels
+\item \textbf{Spectral range:} 430-860 nm
+\item \textbf{Spatial resolution:} 1.3 meters per pixel
+\item \textbf{Ground truth classes:} 9 land cover types
+\end{itemize}
+
+The nine classes include: Asphalt, Meadows, Gravel, Trees, Painted metal sheets, Bare Soil, Bitumen, Self-Blocking Bricks, and Shadows.
+
+\subsection{Data Preprocessing}
+
+\subsubsection{Spectral Dimensionality Reduction}
+To reduce computational complexity and remove redundant information, we will apply Principal Component Analysis (PCA) to reduce spectral bands from 103 to 100, retaining over 99\% of the variance:
+\begin{equation}
+X_{\text{PCA}} = X \cdot W_{\text{PCA}}
+\end{equation}
+where $X \in \mathbb{R}^{N \times 103}$ is the original data reshaped to $N$ pixels, and $W_{\text{PCA}} \in \mathbb{R}^{103 \times 100}$ are the principal components.
+
+\subsubsection{Normalization}
+Min-Max normalization will be applied to scale features to $[0, 1]$:
+\begin{equation}
+x_{\text{norm}} = \frac{x - x_{\min}}{x_{\max} - x_{\min}}
+\end{equation}
+
+\subsubsection{Patch Extraction}
+Spatial patches of size $9 \times 9 \times 100$ centered at each labeled pixel will be extracted using symmetric padding:
+\begin{equation}
+P_i = X_{\text{padded}}[h_i : h_i + 9, w_i : w_i + 9, :]
+\end{equation}
+where $(h_i, w_i)$ is the spatial location of pixel $i$.
+
+\subsection{Few-Shot Learning Setup}
+
+\subsubsection{Task Definition}
+We adopt the $N$-way $K$-shot classification paradigm where $N = 9$ classes and $K = 5$ support samples per class. Each episode consists of:
+
+\begin{itemize}
+\item \textbf{Support set:} $S = \{(x_i^s, y_i^s)\}_{i=1}^{NK}$ with $K = 5$ examples per class
+\item \textbf{Query set:} $Q = \{(x_j^q, y_j^q)\}_{j=1}^{NQ}$ with $Q = 15$ examples per class
+\item \textbf{Test set:} Remaining samples for final evaluation
+\end{itemize}
+
+\subsubsection{Data Splitting Strategy}
+For each class $c$:
+\begin{enumerate}
+\item Randomly select 5 samples for support set
+\item Select next 15 samples for query set
+\item Use remaining samples for test set
+\end{enumerate}
+
+This ensures no overlap between support, query, and test sets while maintaining class balance.
+
+\subsection{Proposed Architecture: DMCM2}
+The DMCM2 framework consists of three main components:
+
+\subsubsection{Feature Extractor: TGAN2}
+TGAN2 is a lightweight 3D CNN based on Ghost Convolution version 2 \cite{tang2022}. The architecture comprises:
+
+\textbf{GhostModule v2:} Generates feature maps efficiently by splitting into primary and cheap operations:
+\begin{equation}
+y = \Phi(x) = [\phi(x), \psi(\phi(x))]
+\end{equation}
+where $\phi$ is primary convolution and $\psi$ is depthwise cheap operation.
+
+\textbf{GA2 Block:} Combines GhostModule with multi-dimensional convolutions:
+\begin{equation}
+F_{\text{GA2}} = \text{DFC}(f_d + f_h + f_w)
+\end{equation}
+where $f_d$, $f_h$, $f_w$ are convolutions along depth, height, and width dimensions, and DFC is the Decoupled Fully Connected attention mechanism.
+
+\textbf{NAM Attention:} Normalizes and weights feature channels:
+\begin{equation}
+F_{\text{out}} = \sigma\left(F \cdot \frac{\gamma}{\sum \gamma + \epsilon}\right) \cdot F
+\end{equation}
+where $\gamma$ are learnable weights and $\sigma$ is sigmoid activation.
+
+\textbf{Network Structure:}
+\begin{enumerate}
+\item Initial 3D convolution: $1 \rightarrow 8$ channels
+\item First block: NAM + GA2 + NAM + Residual + AvgPool
+\item Second block: $1 \times 1$ conv + NAM + GA2 + NAM + Residual + AvgPool
+\item Global feature extraction through flattening
+\end{enumerate}
+
+The output is a feature vector $f \in \mathbb{R}^d$ where $d$ is the feature dimension.
+
+\subsubsection{CCM Distance Metric}
+The Class-Center based Mahalanobis distance measures similarity considering class covariance:
+\begin{equation}
+d_{\text{CCM}}(x, c) = (f(x) - \mu_c)^T \Sigma_c^{-1} (f(x) - \mu_c)
+\end{equation}
+where:
+\begin{itemize}
+\item $f(x)$ is the feature representation
+\item $\mu_c$ is the class prototype (mean of support features)
+\item $\Sigma_c$ is the class covariance matrix with regularization:
+\end{itemize}
+\begin{equation}
+\Sigma_c = \frac{1}{K-1}\sum_{i=1}^{K}(f_i - \mu_c)(f_i - \mu_c)^T + \lambda I
+\end{equation}
+
+Classification is performed by:
+\begin{equation}
+\hat{y} = \arg\min_c d_{\text{CCM}}(x, c)
+\end{equation}
+
+\subsubsection{Intracorrection Learning}
+Intracorrection (IC) enhances meta-learning by also classifying support samples:
+\begin{equation}
+\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{query}} + \lambda_{\text{IC}} \mathcal{L}_{\text{support}}
+\end{equation}
+where:
+\begin{equation}
+\mathcal{L}_{\text{query}} = -\sum_{i=1}^{NQ} \log p(y_i^q | x_i^q, S)
+\end{equation}
+\begin{equation}
+\mathcal{L}_{\text{support}} = -\sum_{i=1}^{NK} \log p(y_i^s | x_i^s, S)
+\end{equation}
+
+This forces the model to learn better class boundaries even within the support set.
+
+\subsection{Training Procedure}
+
+\subsubsection{Episodic Training}
+Training follows an episodic paradigm as shown in Algorithm 1.
+
+\begin{algorithmic}
+\FOR{$\text{epoch} = 1$ to $N_{\text{epochs}}$}
+\FOR{$\text{episode} = 1$ to $N_{\text{episodes}}$}
+\STATE Sample $N$-way $K$-shot task from dataset
+\STATE Extract features: $F_s = f_\theta(S)$, $F_q = f_\theta(Q)$
+\STATE Compute prototypes and covariances
+\STATE Calculate $\mathcal{L}_{\text{total}}$
+\STATE Update $\theta \leftarrow \theta - \alpha \nabla_\theta \mathcal{L}_{\text{total}}$
+\ENDFOR
+\ENDFOR
+\end{algorithmic}
+
+\subsubsection{Hyperparameters}
+Planned training configuration:
+\begin{itemize}
+\item \textbf{Optimizer:} Adam
+\item \textbf{Learning rate:} 0.001
+\item \textbf{Learning rate schedule:} StepLR (decay 0.5 every 10 epochs)
+\item \textbf{Batch size:} 1 episode per iteration
+\item \textbf{Episodes per epoch:} 300
+\item \textbf{Total epochs:} 20
+\item \textbf{IC weight} $\lambda_{\text{IC}}$: 1.0
+\item \textbf{Covariance regularization} $\lambda$: 0.01
+\end{itemize}
+
+\subsection{Evaluation Metrics}
+
+\subsubsection{Classification Metrics}
+We will report the following standard metrics:
+\begin{equation}
+\text{OA} = \frac{\sum_{i=1}^{C} n_{ii}}{N}
+\end{equation}
+\begin{equation}
+\text{AA} = \frac{1}{C}\sum_{i=1}^{C}\frac{n_{ii}}{n_i}
+\end{equation}
+\begin{equation}
+\kappa = \frac{N \sum_{i=1}^{C} n_{ii} - \sum_{i=1}^{C}(n_i \cdot n_i)}{N^2 - \sum_{i=1}^{C}(n_i \cdot n_i)}
+\end{equation}
+where:
+\begin{itemize}
+\item OA is Overall Accuracy
+\item AA is Average Accuracy
+\item $\kappa$ is Cohen's Kappa coefficient
+\item $n_{ii}$ is the number of correctly classified samples in class $i$
+\item $n_i$ is the total number of samples in class $i$
+\item $C$ is the number of classes
+\item $N$ is the total number of test samples
+\end{itemize}
+
+\subsubsection{Computational Efficiency}
+We will measure:
+\begin{itemize}
+\item Total parameters
+\item Training time per epoch
+\item Inference time per sample
+\item GPU memory consumption
+\end{itemize}
+
+\subsubsection{Visualization}
+We will generate:
+\begin{itemize}
+\item Confusion matrices (absolute and normalized)
+\item Classification maps comparing predictions with ground truth
+\item Training curves (loss and accuracy)
+\item Per-class accuracy analysis
+\end{itemize}
+
+\subsection{Baseline Comparisons}
+We will compare our results against the following methods as reported in the literature:
+\begin{itemize}
+\item \textbf{Classical ML:} RBF-SVM
+\item \textbf{Deep Learning:} 3D-CNN, SSRN
+\item \textbf{Few-Shot Learning:} DFSL, RN-FSC, DCFSL, Gia-CFSL, CMFSL
+\item \textbf{Lightweight Meta-learning:} DMCM (v1)
+\item \textbf{State-of-the-art:} DMCM2 (as reported in paper)
+\end{itemize}
+
+\section{Expected Results and Discussion}
+
+\subsection{Expected Performance}
+Based on the original DMCM2 paper, we anticipate achieving:
+\begin{itemize}
+\item Overall Accuracy (OA): 85-95\%
+\item Average Accuracy (AA): 85-95\%
+\item Kappa coefficient: 0.80-0.90
+\end{itemize}
+
+Note that our implementation may achieve lower accuracy than the paper's reported 97.95\% OA due to:
+\begin{enumerate}
+\item Reduced training iterations (20 epochs vs. 10,000 iterations)
+\item Fewer episodes per epoch (300 vs. 1,000)
+\item Simplified implementation for demonstration purposes
+\end{enumerate}
+
+\subsection{Parameter Efficiency}
+TGAN2 is expected to contain approximately 260K parameters, which is:
+\begin{itemize}
+\item 94\% fewer parameters than SSRN ($\sim$4.2M)
+\item 90\% fewer parameters than typical 3D-CNNs
+\item Comparable to MobileNet-based architectures
+\end{itemize}
+
+This dramatic reduction enables:
+\begin{itemize}
+\item Faster training and inference
+\item Lower memory footprint
+\item Deployment on edge devices
+\item Reduced environmental impact
+\end{itemize}
+
+\subsection{Ablation Studies}
+We plan to conduct ablation studies examining:
+\begin{enumerate}
+\item Impact of IC learning: Comparing $\lambda_{\text{IC}} = 0$ vs. $\lambda_{\text{IC}} = 1$
+\item Effect of attention mechanisms: Removing NAM or DFC attention
+\item Patch size sensitivity: Testing $5 \times 5$, $7 \times 7$, $9 \times 9$, $11 \times 11$
+\item Support set size: Varying $K$ from 1 to 10 shots
+\end{enumerate}
+
+\subsection{Limitations}
+Anticipated limitations include:
+\begin{itemize}
+\item Performance gap compared to heavyweight models when abundant training data is available
+\item Sensitivity to initial support set selection
+\item Potential difficulty in extremely imbalanced scenarios
+\item Limited evaluation on a single dataset
+\end{itemize}
+
+\subsection{Future Improvements}
+Potential enhancements for future work:
+\begin{itemize}
+\item Cross-dataset evaluation to assess generalization
+\item Integration with self-supervised pre-training
+\item Application to other HSI datasets (Indian Pines, Salinas, etc.)
+\item Extension to transductive few-shot learning
+\item Exploration of neural architecture search for automated design
+\end{itemize}
+
+\section{Project Timeline}
+
+\begin{table}[htbp]
+\caption{Project Timeline}
+\centering
+\begin{tabular}{cll}
+\toprule
+\textbf{Week} & \textbf{Activity} & \textbf{Status} \\
+\midrule
+1-2 & Literature review and proposal & Planned \\
+3-4 & Dataset preparation and preprocessing & Planned \\
+5-6 & TGAN2 architecture implementation & Planned \\
+7-8 & CCM metric and IC learning implementation & Planned \\
+9-10 & Model training and hyperparameter tuning & Planned \\
+11-12 & Evaluation and result analysis & Planned \\
+13-14 & Report writing and documentation & Planned \\
+15 & Final presentation preparation & Planned \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Resource Requirements}
+
+\subsection{Computational Resources}
+\begin{itemize}
+\item \textbf{GPU:} NVIDIA T4 or equivalent (Google Colab)
+\item \textbf{RAM:} 16GB minimum
+\item \textbf{Storage:} 5GB for dataset and models
+\item \textbf{Software:} Python 3.8+, PyTorch 1.10+, CUDA 11.0+
+\end{itemize}
+
+\subsection{Software Dependencies}
+\begin{itemize}
+\item \textbf{PyTorch:} Deep learning framework
+\item \textbf{NumPy:} Numerical computations
+\item \textbf{scikit-learn:} PCA, metrics, preprocessing
+\item \textbf{SciPy:} Mathematical operations
+\item \textbf{Matplotlib, Seaborn:} Visualization
+\item \textbf{Spectral Python:} HSI data handling
+\end{itemize}
+
+\section{Conclusion}
+
+This research proposal outlines a comprehensive plan to implement and evaluate DMCM2, a lightweight dual-branch meta-learner for few-shot hyperspectral image classification. By integrating TGAN2 feature extraction with CCM distance metric and intracorrection learning, we aim to demonstrate that parameter-efficient architectures can achieve competitive performance in few-shot scenarios.
+
+The proposed approach addresses critical challenges in HSI classification: limited labeled samples, high computational costs, and poor generalization. With only 260K parameters, TGAN2 offers a practical solution for resource-constrained environments while maintaining classification accuracy comparable to heavyweight alternatives.
+
+Upon successful completion, this project will contribute to the growing body of research on efficient deep learning for remote sensing, demonstrating that architectural innovations can balance performance and efficiency. The open-source implementation will enable reproducibility and facilitate further research in lightweight HSI classification methods.
+
+The expected outcomes include comprehensive evaluation results, detailed performance analysis, and practical insights into the trade-offs between model complexity and few-shot learning capability. These findings will be valuable for both academic research and practical applications in remote sensing, precision agriculture, environmental monitoring, and urban planning.
+
+
+\begin{thebibliography}{99}
+
+\bibitem{plaza2009}
+A. Plaza, J. A. Benediktsson, J. W. Boardman et al., ``Recent advances in techniques for hyperspectral image processing,'' \textit{Remote Sensing of Environment}, vol. 113, pp. S110--S122, 2009.
+
+\bibitem{fauvel2013}
+M. Fauvel, Y. Tarabalka, J. A. Benediktsson et al., ``Advances in spectral-spatial classification of hyperspectral images,'' \textit{Proceedings of the IEEE}, vol. 101, no. 3, pp. 652--675, 2013.
+
+\bibitem{melgani2004}
+F. Melgani and L. Bruzzone, ``Classification of hyperspectral remote sensing images with support vector machines,'' \textit{IEEE Transactions on Geoscience and Remote Sensing}, vol. 42, no. 8, pp. 1778--1790, 2004.
+
+\bibitem{zhang2016dl}
+L. Zhang, L. Zhang, and B. Du, ``Deep learning for remote sensing data: A technical tutorial on the state of the art,'' \textit{IEEE Geoscience and Remote Sensing Magazine}, vol. 4, no. 2, pp. 22--40, 2016.
+
+\bibitem{wang2020}
+Y. Wang et al., ``Generalizing from a few examples: A survey on few-shot learning,'' \textit{ACM Computing Surveys}, vol. 53, no. 3, pp. 1--34, 2020.
+
+\bibitem{finn2017}
+C. Finn, P. Abbeel, and S. Levine, ``Model-agnostic meta-learning for fast adaptation of deep networks,'' \textit{Proc. ICML}, pp. 1126--1135, 2017.
+
+\bibitem{gao2019}
+Y. Gao et al., ``Deep feature-based framework for hyperspectral image classification,'' \textit{Remote Sensing}, vol. 11, no. 14, p. 1617, 2019.
+
+\bibitem{li2020}
+Y. Li et al., ``Relation network for few-shot classification of hyperspectral images,'' \textit{IEEE GRSL}, vol. 17, no. 9, pp. 1555--1559, 2020.
+
+\bibitem{zhang2021}
+J. Zhang et al., ``Cross-domain meta-learning for few-shot hyperspectral image classification,'' \textit{IEEE TGRS}, vol. 59, no. 8, pp. 6856--6871, 2021.
+
+\bibitem{landgrebe2002}
+D. Landgrebe, ``Hyperspectral image data analysis,'' \textit{IEEE Signal Processing Magazine}, vol. 19, no. 1, pp. 17--28, 2002.
+
+\bibitem{dallamura2010}
+M. Dalla Mura et al., ``Morphological attribute profiles for the analysis of very high resolution images,'' \textit{IEEE TGRS}, vol. 48, no. 10, pp. 3747--3762, 2010.
+
+\bibitem{chen2014}
+Y. Chen, Z. Lin, X. Zhao, G. Wang, and Y. Gu, ``Deep learning-based classification of hyperspectral data,'' \textit{IEEE JSTARS}, vol. 7, no. 6, pp. 2094--2107, 2014.
+
+\bibitem{hu2015}
+W. Hu, Y. Huang, L. Wei, F. Zhang, and H. Li, ``Deep convolutional neural networks for hyperspectral image classification,'' \textit{Journal of Sensors}, 2015.
+
+\bibitem{zhao2016}
+W. Zhao and S. Du, ``Spectral-spatial feature extraction for hyperspectral image classification,'' \textit{IEEE JSTARS}, vol. 9, no. 10, pp. 4799--4807, 2016.
+
+\bibitem{li2017}
+Y. Li, H. Zhang, and Q. Shen, ``Spectral-spatial classification of hyperspectral imagery with 3D convolutional neural network,'' \textit{Remote Sensing}, vol. 9, no. 1, p. 67, 2017.
+
+\bibitem{zhong2018}
+L. Zhong et al., ``Spectral-spatial residual network for hyperspectral image classification,'' \textit{Remote Sensing}, vol. 10, no. 1, p. 107, 2018.
+
+\bibitem{roy2020}
+S. K. Roy, G. Krishna, S. R. Dubey, and B. B. Chaudhuri, ``HybridSN: Exploring 3-D-2-D CNN feature hierarchy for hyperspectral image classification,'' \textit{IEEE GRSL}, vol. 17, no. 2, pp
+\end{thebibliography}
+
+\vspace{12pt}
+
+\end{document}

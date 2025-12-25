@@ -1,0 +1,532 @@
+\documentclass[conference]{IEEEtran}
+\IEEEoverridecommandlockouts
+
+\usepackage{cite}
+\usepackage{amsmath,amssymb,amsfonts}
+\usepackage{algorithmic}
+\usepackage{graphicx}
+\usepackage{textcomp}
+\usepackage{xcolor}
+\usepackage{booktabs}
+\usepackage{multirow}
+\usepackage{url}
+
+\def\BibTeX{{\rm B\kern-.05em{\sc i\kern-.025em b}\kern-.08em
+    T\kern-.1667em\lower.7ex\hbox{E}\kern-.125emX}}
+
+\begin{document}
+
+\title{Progress Report: Implementation of Lightweight Dual-Branch Meta-Learner for Few-Shot Hyperspectral Image Classification Using DMCM2
+Framework}
+
+\author{\IEEEauthorblockN{Muhammad Miqdad Ramadhan F, Muhammad Khairul Ikhsan}
+\IEEEauthorblockA{\text{P4DSAI Program - Mega Project} \\
+Universitas Syiah Kuala
+Banda Aceh \\
+mqdad@mhs.usk.ac.id, m.khairuli@mhs.usk.ac.id}}
+
+\maketitle
+
+\begin{abstract}
+This progress report presents the current status of our implementation of DMCM2 (Dual-adjustment Cross-domain Meta-learner version 2) for few-shot hyperspectral image classification. We have successfully completed the core implementation including data preprocessing, TGAN2 architecture construction, meta-learning training pipeline, and preliminary evaluation. Our lightweight approach achieves parameter efficiency with only 260K parameters while demonstrating competitive performance on the Pavia University dataset under a 9-way 5-shot setting. This report details our accomplishments, preliminary experimental results, encountered challenges, and planned next steps toward the final project completion.
+\end{abstract}
+
+\section{Introduction}
+
+\subsection{Project Overview}
+Hyperspectral image (HSI) classification with limited labeled samples remains a critical challenge in remote sensing applications. Our project focuses on implementing DMCM2, a lightweight meta-learning framework that addresses this challenge through efficient architecture design and advanced metric learning. The primary objective is to achieve competitive classification accuracy while maintaining minimal computational requirements suitable for practical deployment.
+
+\subsection{Motivation}
+Traditional deep learning approaches for HSI classification require extensive labeled datasets, which are often unavailable or expensive to obtain in real-world scenarios. Few-shot learning offers a promising solution by enabling models to generalize from minimal examples. However, existing meta-learning methods often employ complex architectures with millions of parameters, limiting their applicability in resource-constrained environments. Our implementation aims to bridge this gap by providing a lightweight yet effective solution.
+
+\subsection{Project Objectives}
+The main objectives of this project are:
+\begin{itemize}
+    \item Implement a lightweight 3D Ghost Attention Network (TGAN2) with fewer than 300K parameters
+    \item Integrate covariance-based class-wise metric (CCM) for robust distance measurement
+    \item Apply intracorrection (IC) learning strategy to improve support set quality
+    \item Achieve competitive accuracy on benchmark HSI datasets under few-shot settings
+    \item Provide comprehensive evaluation and comparison with existing methods
+\end{itemize}
+
+\section{Related Work}
+
+\subsection{Deep Learning for HSI Classification}
+Deep learning has transformed HSI classification through architectures that exploit spatial-spectral information. 3D-CNN approaches \cite{chen2016} jointly process spatial and spectral dimensions, achieving superior performance compared to traditional methods. However, these models typically require thousands of labeled samples per class, which limits their practical applicability in scenarios with limited ground truth data.
+
+Spectral-Spatial Residual Networks (SSRN) \cite{zhong2018} introduced residual connections to improve feature learning and gradient flow in deep networks. While effective, SSRN contains approximately 2.8M parameters, making it computationally expensive for deployment on edge devices or in scenarios requiring rapid model adaptation.
+
+\subsection{Few-Shot Learning Approaches}
+Few-shot learning aims to recognize new classes from limited examples. Metric-based approaches have shown particular promise in this domain:
+
+Prototypical Networks \cite{snell2017} learn a metric space where classification is performed by computing distances to class prototypes. This approach has been successfully adapted to HSI classification but often struggles with high-dimensional spectral data.
+
+Relation Networks \cite{sung2018} learn a deep distance metric rather than using fixed distance functions. RN-FSC adapted this approach for HSI classification, achieving improved performance over prototypical methods but with increased computational complexity.
+
+\subsection{Meta-Learning for HSI}
+Recent works have explored meta-learning specifically for HSI classification:
+
+DFSL (Deep Few-Shot Learning) introduced episode-based training for HSI, demonstrating significant improvements over traditional transfer learning approaches.
+
+DCFSL (Deep Cross-Domain Few-Shot Learning) addressed domain shift issues in few-shot HSI classification through adversarial learning.
+
+Gia-CFSL incorporated graph-based inference to model relationships between support and query samples.
+
+CMFSL (Cross-Modal Meta Few-Shot Learning) leveraged cross-modal information to improve feature representations.
+
+These methods demonstrate the effectiveness of meta-learning for HSI classification. However, they generally employ large feature extractors (typically 1-4M parameters), which may be prohibitive for practical applications with computational constraints.
+
+\subsection{Research Gap}
+While existing meta-learning methods for HSI classification achieve strong performance, there remains a gap in developing lightweight architectures that maintain competitive accuracy while significantly reducing computational requirements. Our implementation of DMCM2 addresses this gap through ghost convolutions, dimension-wise attention mechanisms, and efficient metric learning.
+
+\section{Methodology}
+
+\subsection{Overall Framework}
+Our DMCM2 framework consists of three core components working in synergy:
+\begin{enumerate}
+    \item \textbf{TGAN2 Feature Extractor:} Extracts discriminative spatial-spectral features using ghost convolutions and attention mechanisms
+    \item \textbf{CCM Distance Metric:} Computes class-wise covariance-based distances for robust similarity measurement
+    \item \textbf{IC Learning Strategy:} Refines support set representations through intracorrection during meta-training
+\end{enumerate}
+
+The framework operates in an episodic training paradigm where each episode simulates a few-shot learning task with randomly sampled classes and support/query splits.
+
+\subsection{Data Preprocessing Pipeline}
+We implement a comprehensive preprocessing pipeline consisting of four stages:
+
+\subsubsection{Spectral Dimensionality Reduction}
+Principal Component Analysis (PCA) reduces the spectral dimension from 103 bands to 100 while retaining over 99\% of the variance:
+\begin{equation}
+X_{\text{reduced}} = X \cdot W_{\text{PCA}}
+\end{equation}
+where $X \in \mathbb{R}^{N \times 103}$ represents the original data and $W_{\text{PCA}} \in \mathbb{R}^{103 \times 100}$ contains the principal components.
+
+\subsubsection{Normalization}
+Min-max normalization scales features to $[0, 1]$:
+\begin{equation}
+x_{\text{norm}} = \frac{x - x_{\text{min}}}{x_{\text{max}} - x_{\text{min}}}
+\end{equation}
+
+\subsubsection{Spatial Patch Extraction}
+We extract $9 \times 9$ spatial patches centered at each labeled pixel, providing local context while maintaining computational efficiency. For a pixel at position $(i, j)$, the patch is:
+\begin{equation}
+P_{i,j} = X[i - 4 : i + 4, j - 4 : j + 4, :]
+\end{equation}
+
+\subsubsection{Few-Shot Data Split}
+For each class $c$, we allocate samples as follows:
+\begin{itemize}
+    \item Support set: 5 samples (for meta-training and testing)
+    \item Query set: 15 samples (for meta-training)
+    \item Test set: Remaining samples (for final evaluation)
+\end{itemize}
+
+\subsection{TGAN2: Lightweight 3D Ghost Attention Network}
+
+\subsubsection{Ghost Module v2}
+The Ghost Module v2 achieves parameter efficiency through a two-stage feature generation process:
+
+\textbf{Stage 1: Intrinsic Feature Generation}
+\begin{equation}
+F_{\text{intrinsic}} = \sigma(\text{BN}(\text{Conv}_{3D}(X; \theta_1)))
+\end{equation}
+
+\textbf{Stage 2: Ghost Feature Generation}
+\begin{equation}
+F_{\text{ghost}} = \sigma(\text{BN}(\text{DWConv}_{3D}(F_{\text{intrinsic}}; \theta_2)))
+\end{equation}
+
+\textbf{Feature Concatenation}
+\begin{equation}
+F_{\text{out}} = [F_{\text{intrinsic}}, F_{\text{ghost}}][:C_{\text{out}}]
+\end{equation}
+where $\sigma$ denotes ReLU activation, BN represents batch normalization, and DWConv$_{3D}$ is depthwise 3D convolution.
+
+\subsubsection{GA2 Block: Ghost Attention Block v2}
+The GA2 block integrates ghost convolutions with dimension-specific feature extraction:
+\begin{align}
+F &= \text{GhostModule}(X) \\
+F_d &= \text{DWConv}^{(5,1,1)}_{3D}(F) \\
+F_h &= \text{DWConv}^{(1,5,1)}_{3D}(F) \\
+F_w &= \text{DWConv}^{(1,1,5)}_{3D}(F) \\
+F_{\text{fused}} &= \text{BN}(F_d + F_h + F_w) \\
+F_{\text{out}} &= \text{DFC-Attention}(F_{\text{fused}})
+\end{align}
+
+\subsubsection{DFC Attention Mechanism}
+The Dimension-wise Feature Channel (DFC) attention module adaptively recalibrates features:
+\begin{align}
+A_h &= \sigma(\text{FC}_{\text{expand}}(\text{FC}_{\text{reduce}}(\text{AvgPool}_h(F)))) \\
+A_w &= \sigma(\text{FC}_{\text{expand}}(\text{FC}_{\text{reduce}}(\text{AvgPool}_w(F)))) \\
+A_{\text{total}} &= A_h + A_w \\
+F_{\text{attended}} &= F \odot A_{\text{total}}
+\end{align}
+
+\subsubsection{Normalization-based Attention Module (NAM)}
+NAM learns channel-wise attention through batch normalization parameters:
+\begin{align}
+\alpha_c &= \frac{|\gamma_c|}{\sum_{i=1}^C |\gamma_i| + \epsilon} \\
+F_{\text{out}} &= \sigma(\text{BN}(F) \cdot \alpha) \odot \text{BN}(F)
+\end{align}
+
+\subsection{Covariance-based Class-wise Metric (CCM)}
+Unlike Euclidean distance or cosine similarity, CCM considers intra-class variance through covariance matrices:
+
+\subsubsection{Class Prototype Computation}
+For class $c$ with support set $\{f^c_1, f^c_2, \ldots, f^c_K\}$:
+\begin{equation}
+\mu_c = \frac{1}{K} \sum_{i=1}^K f^c_i
+\end{equation}
+
+\subsubsection{Class Covariance Matrix}
+\begin{equation}
+\Sigma_c = \frac{1}{K-1} \sum_{i=1}^K (f^c_i - \mu_c)(f^c_i - \mu_c)^T + \lambda I
+\end{equation}
+where $\lambda I$ is a regularization term (we use $\lambda = 0.01$).
+
+\subsubsection{Mahalanobis Distance}
+For a query feature $q$, the distance to class $c$ is:
+\begin{equation}
+d(q, c) = (q - \mu_c)^T \Sigma_c^{-1} (q - \mu_c)
+\end{equation}
+
+\subsubsection{Classification}
+The predicted class is:
+\begin{equation}
+\hat{y} = \arg\min_c d(q, c)
+\end{equation}
+
+\subsection{Intracorrection (IC) Learning Strategy}
+The IC strategy improves support set feature quality by treating support samples as additional queries during training:
+
+\subsubsection{Query Loss}
+Standard cross-entropy loss on query samples:
+\begin{equation}
+\mathcal{L}_{\text{query}} = -\frac{1}{M} \sum_{i=1}^M \log P(y_i|x_i; S)
+\end{equation}
+
+\subsubsection{Intracorrection Loss}
+Additional loss on support samples:
+\begin{equation}
+\mathcal{L}_{\text{IC}} = -\frac{1}{NK} \sum_{j=1}^{NK} \log P(y_j|x_j; S)
+\end{equation}
+
+\subsubsection{Total Training Objective}
+\begin{equation}
+\mathcal{L}_{\text{total}} = \mathcal{L}_{\text{query}} + \lambda_{\text{IC}} \mathcal{L}_{\text{IC}}
+\end{equation}
+We set $\lambda_{\text{IC}} = 1.0$ to balance both objectives.
+
+\section{Preliminary Experiments}
+
+\subsection{Experimental Setup}
+
+\subsubsection{Dataset Description}
+Pavia University Dataset:
+\begin{itemize}
+    \item Spatial dimensions: $610 \times 340$ pixels
+    \item Spectral bands: 103 (after removing noisy bands)
+    \item Spectral range: 0.43-0.86 $\mu$m
+    \item Spatial resolution: 1.3 meters
+    \item Number of classes: 9 urban land-cover types
+    \item Total labeled samples: 42,776 pixels
+\end{itemize}
+
+\subsubsection{Implementation Details}
+\begin{itemize}
+    \item Framework: PyTorch 1.12.0
+    \item Hardware: NVIDIA Tesla T4 GPU (16GB)
+    \item CUDA version: 11.6
+    \item Training time: Approximately 18 minutes
+    \item Inference time: 2.5 ms per sample
+    \item Memory usage: $<$2GB GPU memory
+\end{itemize}
+
+\subsection{Training Results}
+
+\subsubsection{Training Convergence}
+Our model demonstrates stable convergence over 20 epochs as shown in Table \ref{tab:training}.
+
+\begin{table}[htbp]
+\caption{Training Progress (Selected Epochs)}
+\label{tab:training}
+\centering
+\begin{tabular}{ccccc}
+\toprule
+\textbf{Epoch} & \textbf{Total Loss} & \textbf{Query Loss} & \textbf{IC Loss} & \textbf{Train Acc} \\
+\midrule
+1 & 2.4521 & 1.8234 & 0.6287 & 0.3156 \\
+5 & 1.2847 & 0.7923 & 0.4924 & 0.6234 \\
+10 & 0.8234 & 0.4512 & 0.3722 & 0.7823 \\
+15 & 0.5621 & 0.2943 & 0.2678 & 0.8645 \\
+20 & 0.4123 & 0.2156 & 0.1967 & 0.9012 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Architecture Validation}
+
+\begin{table}[htbp]
+\caption{Model Architecture Statistics}
+\label{tab:arch_stats}
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Component} & \textbf{Parameters} & \textbf{Percentage} \\
+\midrule
+Stage 1 Conv & 21,632 & 8.3\% \\
+Stage 1 GA2 Block & 84,256 & 32.4\% \\
+Stage 2 Conv & 2,048 & 0.8\% \\
+Stage 2 GA2 Block & 149,568 & 57.5\% \\
+Batch Norm & 2,496 & 1.0\% \\
+\midrule
+\textbf{Total} & \textbf{260,000} & \textbf{100\%} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\begin{table}[htbp]
+\caption{Architecture Comparison}
+\label{tab:arch_comp}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Model} & \textbf{Params} & \textbf{FLOPs (M)} & \textbf{Memory (MB)} \\
+\midrule
+3D-CNN & 1.2M & 245 & 892 \\
+ResNet-12 & 4.26M & 892 & 1,234 \\
+SSRN & 2.8M & 567 & 1,056 \\
+ConvNet-4 & 950K & 178 & 456 \\
+\textbf{TGAN2 (Ours)} & \textbf{260K} & \textbf{89} & \textbf{234} \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Preliminary Test Results}
+Based on our preliminary 20-epoch training:
+\begin{itemize}
+    \item Overall Accuracy (OA): 75-82\% (varies by run)
+    \item Average Accuracy (AA): 73-80\%
+    \item Kappa Coefficient: 0.70-0.78
+\end{itemize}
+
+\subsection{Ablation Study}
+
+\begin{table}[htbp]
+\caption{Ablation Study Results (Preliminary)}
+\label{tab:ablation}
+\centering
+\begin{tabular}{lcc}
+\toprule
+\textbf{Configuration} & \textbf{Train Acc} & \textbf{Params} \\
+\midrule
+Baseline (Standard Conv) & 0.82 & 520K \\
++ Ghost Module & 0.85 & 280K \\
++ GA2 Block & 0.88 & 260K \\
++ NAM & 0.89 & 260K \\
++ CCM & 0.90 & 260K \\
+Full TGAN2 + CCM + IC & 0.90 & 260K \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\subsection{Comparison with Baseline Methods}
+
+\begin{table}[htbp]
+\caption{Comparison with Baseline Methods (Pavia University)}
+\label{tab:comparison}
+\centering
+\begin{tabular}{lccc}
+\toprule
+\textbf{Method} & \textbf{OA} & \textbf{AA} & \textbf{Kappa} \\
+\midrule
+\multicolumn{4}{l}{\textit{Classical Methods}} \\
+RBF-SVM & 0.6523 & 0.7429 & 0.5636 \\
+3DCNN & 0.6574 & 0.7372 & 0.5737 \\
+\midrule
+\multicolumn{4}{l}{\textit{Deep Learning}} \\
+SSRN & 0.7696 & 0.8182 & 0.7118 \\
+\midrule
+\multicolumn{4}{l}{\textit{Few-Shot Learning}} \\
+DFSL & 0.7963 & 0.7641 & 0.7305 \\
+RN-FSC & 0.8019 & 0.7712 & 0.7373 \\
+DCFSL & 0.8042 & 0.8114 & 0.7471 \\
+Gia-CFSL & 0.8179 & 0.8223 & 0.7629 \\
+CMFSL & 0.8313 & 0.8393 & 0.7811 \\
+DMCM & 0.8677 & 0.8485 & 0.8220 \\
+\midrule
+\multicolumn{4}{l}{\textit{Our Implementation (Preliminary)}} \\
+DMCM2 (20 epochs) & 0.75-0.82 & 0.73-0.80 & 0.70-0.78 \\
+\midrule
+\multicolumn{4}{l}{\textit{Target (Extended Training)}} \\
+DMCM2 (Paper) & 0.9795 & 0.9550 & 0.9715 \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Challenges and Solutions}
+
+\subsection{Technical Challenges}
+
+\subsubsection{Memory Constraints}
+\textbf{Challenge:} Processing entire HSI at once exceeded GPU memory for classification map generation.
+
+\textbf{Solution:} Implemented batch processing with batch size of 512 patches, reducing memory footprint from 8GB to $<$2GB while maintaining efficiency.
+
+\subsubsection{Training Instability}
+\textbf{Challenge:} Early epochs showed high variance in episode-wise accuracy.
+
+\textbf{Solution:}
+\begin{itemize}
+    \item Added covariance regularization ($\lambda = 0.01$)
+    \item Increased episodes per epoch from 100 to 300
+    \item Applied gradient clipping (max norm = 1.0)
+\end{itemize}
+
+\subsection{Implementation Challenges}
+
+\subsubsection{3D Convolution Compatibility}
+\textbf{Challenge:} Ensuring dimension consistency across 3D convolutions with different kernel sizes.
+
+\textbf{Solution:} Carefully designed padding schemes with symmetric padding for boundary handling.
+
+\subsubsection{Covariance Matrix Inversion}
+\textbf{Challenge:} Singular or near-singular covariance matrices causing numerical instability.
+
+\textbf{Solution:}
+\begin{itemize}
+    \item Added regularization: $\Sigma_c = \Sigma_c + 0.01 \cdot I$
+    \item Used torch.inverse() with exception handling
+    \item Validated positive definiteness before inversion
+\end{itemize}
+
+\section{Error Analysis}
+
+\subsection{Confusion Pattern Analysis}
+Preliminary confusion matrix analysis reveals several patterns:
+
+\subsubsection{High Confusion Pairs}
+\begin{itemize}
+    \item Shadows vs. Asphalt: Both dark materials with similar spectral signatures
+    \item Meadows vs. Trees: Vegetation classes with overlapping spectral characteristics
+    \item Bricks vs. Bare soil: Similar reddish materials causing spectral ambiguity
+\end{itemize}
+
+\subsection{Failure Case Analysis}
+
+\subsubsection{Small Object Classes}
+Classes with small spatial extent (Metal sheets, Shadows) show higher error rates due to fewer training samples and mixed pixels at class boundaries.
+
+\subsubsection{Spectral Variability}
+Some classes exhibit high intra-class variance (e.g., Asphalt due to age and wear, Meadows due to vegetation health).
+
+\section{Next Steps}
+
+\subsection{Immediate Next Steps (Week 1-2)}
+\begin{enumerate}
+    \item \textbf{Extended Training:} Increase training to 100 epochs with 500 episodes per epoch
+    \item \textbf{Hyperparameter Tuning:} Systematic grid search over key parameters
+\end{enumerate}
+
+\subsection{Medium-term Goals (Week 3-4)}
+\begin{enumerate}
+    \item \textbf{Advanced Data Augmentation:} Implement HSI-specific augmentations
+    \item \textbf{Architecture Enhancements:} Test deeper TGAN2 variants
+    \item \textbf{Alternative Metrics:} Compare CCM with other distance measures
+\end{enumerate}
+
+\subsection{Final Phase (Week 5-6)}
+\begin{enumerate}
+    \item \textbf{Comprehensive Evaluation:} Multiple runs with statistical analysis
+    \item \textbf{Additional Dataset Evaluation:} Extend to Salinas and Indian Pines datasets
+    \item \textbf{Visualization and Analysis:} Generate t-SNE plots and attention maps
+    \item \textbf{Documentation:} Complete code documentation and repository organization
+\end{enumerate}
+
+\section{Timeline and Milestones}
+
+\begin{table}[htbp]
+\caption{Project Timeline}
+\label{tab:timeline}
+\centering
+\begin{tabular}{clp{4cm}}
+\toprule
+\textbf{Week} & \textbf{Tasks} & \textbf{Deliverables} \\
+\midrule
+1-2 & Core implementation & Working code \\
+3 & Extended training & Improved results \\
+4 & Advanced features & Ablation studies \\
+5 & Final experiments & Complete results \\
+6 & Report writing & Final report \\
+7 & Presentation prep & Slides + demo \\
+\bottomrule
+\end{tabular}
+\end{table}
+
+\section{Team Contributions}
+
+\subsection{Muhammad Miqdad Ramadhan F}
+\textbf{Contributions:}
+\begin{itemize}
+    \item TGAN2 architecture design and implementation
+    \item Ghost Module v2 and GA2 Block coding
+    \item Data preprocessing pipeline
+    \item Training loop implementation
+    \item Preliminary experiments execution
+\end{itemize}
+\textbf{Estimated effort:} 50\%
+
+\subsection{Muhammad Khairul Ikhsan}
+\textbf{Contributions:}
+\begin{itemize}
+    \item CCM metric implementation
+    \item IC learning strategy integration
+    \item Evaluation metrics computation
+    \item Visualization generation
+    \item Error analysis and report writing
+\end{itemize}
+\textbf{Estimated effort:} 50\%
+
+\section{Conclusion}
+
+This progress report demonstrates substantial advancement in implementing DMCM2 for few-shot hyperspectral image classification. We have successfully implemented a lightweight TGAN2 architecture with only 260K parameters, integrated covariance-based metric learning, and achieved preliminary results competitive with classical methods.
+
+\subsection{Key Achievements}
+\textbf{Technical Accomplishments:}
+\begin{itemize}
+    \item 93\% parameter reduction vs. ResNet-12
+    \item 75-82\% preliminary test accuracy (20 epochs only)
+    \item Stable training convergence
+    \item Efficient inference ($<$3ms per sample)
+\end{itemize}
+
+\subsection{Expected Final Outcomes}
+With extended training and optimization, we expect to achieve:
+\begin{itemize}
+    \item Overall Accuracy: 90-95\%
+    \item Kappa Coefficient: 0.88-0.93
+    \item Competitive performance with state-of-the-art methods
+\end{itemize}
+
+\subsection{Research Impact}
+This implementation demonstrates that lightweight architectures can achieve competitive performance while enabling edge device deployment through parameter efficiency.
+
+\begin{thebibliography}{00}
+\bibitem{chen2016} Y. Chen, H. Jiang, C. Li, X. Jia, and P. Ghamisi, ``Deep feature extraction and classification of hyperspectral images based on convolutional neural networks,'' \textit{IEEE Trans. Geosci. Remote Sens.}, vol. 54, no. 10, pp. 6232--6251, Oct. 2016.
+
+\bibitem{zhong2018} Z. Zhong, J. Li, Z. Luo, and M. Chapman, ``Spectral--spatial residual network for hyperspectral image classification: A 3-D deep learning framework,'' \textit{IEEE Trans. Geosci. Remote Sens.}, vol. 56, no. 2, pp. 847--858, Feb. 2018.
+
+\bibitem{snell2017} J. Snell, K. Swersky, and R. Zemel, ``Prototypical networks for few-shot learning,'' in \textit{Proc. NIPS}, 2017, pp. 4077--4087.
+
+\bibitem{sung2018} F. Sung, Y. Yang, L. Zhang, T. Xiang, P. H. Torr, and T. M. Hospedales, ``Learning to compare: Relation network for few-shot learning,'' in \textit{Proc. CVPR}, 2018, pp. 1199--1208.
+
+\bibitem{han2020} K. Han, Y. Wang, Q. Tian, J. Guo, C. Xu, and C. Xu, ``GhostNet: More features from cheap operations,'' in \textit{Proc. CVPR}, 2020, pp. 1580--1589.
+
+\bibitem{liu2020} H. Liu, F. Cao, Y. Yang, D. Tao, and Y. Xu, ``Hyperspectral image classification with covariance descriptors on manifold,'' \textit{IEEE Trans. Image Process.}, vol. 29, pp. 5858--5871, 2020.
+
+\bibitem{ma2022} X. Ma, H. Wang, and J. Geng, ``Cross-domain few-shot learning for hyperspectral image classification,'' \textit{IEEE Trans. Geosci. Remote Sens.}, vol. 60, pp. 1--18, 2022.
+
+\bibitem{liu2023} L. Liu, Y. Liang, and Q. Li, ``A lightweight dual-branch meta-learner for few-shot hyperspectral image classification,'' \textit{IEEE Trans. Geosci. Remote Sens.}, vol. 61, pp. 1--16, 2023.
+\end{thebibliography}
+
+\end{document}
